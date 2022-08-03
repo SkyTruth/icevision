@@ -59,7 +59,6 @@ def draw_sample(
 ) -> Union[np.ndarray, PIL.Image.Image]:
     """
     Selected kwargs:
-
     * label_color: A <collection> of RGB values or a hex code string that defines
                    the color of all the plotted labels
     * label_border_color: Color of the border around the label
@@ -94,17 +93,14 @@ def draw_sample(
             if composite.mask_array is None:
                 if isinstance(composite.masks[0], RLE):
                     masks = [
-                        mask.to_mask(img.shape[1], img.shape[0]).data
-                        for mask in composite.masks
+                        mask.to_mask(img.shape[1], img.shape[0]).data for mask in composite.masks
                     ]
                 elif isinstance(composite.masks[0], EncodedRLEs):
                     masks = composite.masks[0].to_mask(img.shape[0], img.shape[1]).data
                 elif isinstance(composite.masks[0], MaskArray):
                     mask = composite.masks[0]
                 else:
-                    raise ValueError(
-                        "Mask has to be of they RLE, EncodedRLEs or MaskArray."
-                    )
+                    raise ValueError("Mask has to be of they RLE, EncodedRLEs or MaskArray.")
             else:
                 mask = composite.mask_array
             return draw_segmentation_mask(img, mask, cm, display_mask=display_mask)
@@ -116,11 +112,7 @@ def draw_sample(
 
         if composite.get_component_by_type(ClassificationLabelsRecordComponent):
             x = 0
-            y = (
-                font_size
-                * num_classification_plotted
-                * multiple_classification_spacing_factor
-            )
+            y = font_size * num_classification_plotted * multiple_classification_spacing_factor
             num_classification_plotted += 1
         else:
             x, y = None, None
@@ -130,8 +122,7 @@ def draw_sample(
             if composite.mask_array is None:
                 if isinstance(composite.masks[0], RLE):
                     masks = [
-                        mask.to_mask(img.shape[1], img.shape[0]).data
-                        for mask in composite.masks
+                        mask.to_mask(img.shape[1], img.shape[0]).data for mask in composite.masks
                     ]
                 elif isinstance(composite.masks[0], MaskFile):
                     if force_mask_file_reload:
@@ -139,8 +130,7 @@ def draw_sample(
                             "Re-creating masks from files, might results in mismatches if transformations were applied"
                         )
                         masks = [
-                            mask.to_mask(img.shape[1], img.shape[0])
-                            for mask in composite.masks
+                            mask.to_mask(img.shape[1], img.shape[0]) for mask in composite.masks
                         ]
                     else:
                         logger.warning(
@@ -152,9 +142,7 @@ def draw_sample(
                 elif isinstance(composite.masks[0], MaskArray):
                     mask = composite.masks[0]
                 else:
-                    raise ValueError(
-                        "Mask has to be of they RLE, EncodedRLEs or MaskArray."
-                    )
+                    raise ValueError("Mask has to be of they RLE, EncodedRLEs or MaskArray.")
             else:
                 masks = composite.mask_array
         else:
@@ -202,9 +190,7 @@ def draw_sample(
             if display_label and label is not None:
                 prefix = ""
                 if include_classification_task_names:
-                    if composite.get_component_by_type(
-                        ClassificationLabelsRecordComponent
-                    ):
+                    if composite.get_component_by_type(ClassificationLabelsRecordComponent):
                         prefix = prettify_func(task) + ": "
                 if include_instances_task_names:
                     if composite.get_component_by_type(InstancesLabelsRecordComponent):
@@ -237,7 +223,7 @@ def draw_sample(
     else:
         # will be a `np.ndarray` by default so no need for casting
         if mask is None:
-            img = np.repeat(img[:,:,0][:,:,np.newaxis],3, axis=2)
+            img = np.repeat(img[:, :, 0][:, :, np.newaxis], 3, axis=2)
         return img
 
 
@@ -340,18 +326,10 @@ def _draw_label(
 
     if thin_border is not None:
         # Draw thin / thick border around text
-        draw.text(
-            (x - 1, y if thin_border else y - 1), caption, font=font, fill=border_color
-        )
-        draw.text(
-            (x + 1, y if thin_border else y - 1), caption, font=font, fill=border_color
-        )
-        draw.text(
-            (x if thin_border else x - 1, y - 1), caption, font=font, fill=border_color
-        )
-        draw.text(
-            (x if thin_border else x + 1, y + 1), caption, font=font, fill=border_color
-        )
+        draw.text((x - 1, y if thin_border else y - 1), caption, font=font, fill=border_color)
+        draw.text((x + 1, y if thin_border else y - 1), caption, font=font, fill=border_color)
+        draw.text((x if thin_border else x - 1, y - 1), caption, font=font, fill=border_color)
+        draw.text((x if thin_border else x + 1, y + 1), caption, font=font, fill=border_color)
 
     # Now draw text over the border
     draw.text((x, y), caption, font=font, fill=color)
@@ -576,7 +554,7 @@ def draw_mask(
         raise ValueError(
             f"`border_thickness` must be an odd number. You entered {border_thickness}"
         )
-    img = np.repeat(img[:,:,0][:,:,np.newaxis],3, axis=2)
+    img = np.repeat(img[:, :, 0][:, :, np.newaxis], 3, axis=2)
     img = PIL.Image.fromarray(img)
     w, h = img.size
 
@@ -645,7 +623,7 @@ def draw_keypoints(
     img_area = img_h * img_w
     img = PIL.Image.fromarray(img)
     draw = PIL.ImageDraw.Draw(img)
-    dynamic_size = int(0.01867599 * (img_area**0.4422045))
+    dynamic_size = int(0.01867599 * (img_area ** 0.4422045))
     dynamic_size = max(dynamic_size, 1)
 
     # draw connections
