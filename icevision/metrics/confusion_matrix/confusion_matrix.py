@@ -6,6 +6,7 @@ from icevision.imports import *
 from icevision.metrics.confusion_matrix.confusion_matrix_utils import *
 import PIL
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 class MatchingPolicy(Enum):
@@ -90,10 +91,20 @@ class SimpleConfusionMatrix(Metric):
             y_pred=self.predicted_labels,
             labels=label_ids,
         )
+        # https://scikit-learn.org/stable/modules/generated/sklearn.metrics.precision_recall_fscore_support.html#sklearn.metrics.precision_recall_fscore_support
+        p, r, f1, _ = sklearn.metrics.precision_recall_fscore_support(
+            y_true=self.target_labels,
+            y_pred=self.predicted_labels,
+            labels=label_ids,
+        )
+        # default is no average so p r a nd f1 are initially arrays with vals for each class
+        p = {"Infra P": np.round(p[1], 3), "Vessel P": np.round(p[2], 3)}
+        r = {"Infra Recall": np.round(r[1], 3), "Vessel Recall": np.round(r[2], 3)}
+        f1 = {"Infra f1": np.round(f1[1], 3), "Vessel f1": np.round(f1[2], 3)}
         if self.print_summary:
             print(self.confusion_matrix)
         self._reset()
-        return {"dummy_value_for_fastai": -1}
+        return {"dummy_value_for_fastai": [p, r, f1]}
 
     def plot(
         self,

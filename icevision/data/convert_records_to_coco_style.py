@@ -104,6 +104,7 @@ def convert_record_to_coco_annotations(record):
         # HACK: Hacky again!
         mask_array = record.detection.mask_array
         if mask_array is None:
+            
             mask_array = MaskArray.from_masks(
                 record.detection.masks, record.height, record.width
             )
