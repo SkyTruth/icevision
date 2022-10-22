@@ -2,13 +2,13 @@ from icevision.imports import *
 from icevision import BBox, BaseRecord
 
 
-def get_best_score_item(prediction_items: Collection[Dict]):
+def get_best_score_item(prediction_items: Collection[Dict], background_class_id):
     # fill with dummy if list of prediction_items is empty
     dummy = dict(
         predicted_bbox=BBox.from_xyxy(0, 0, 0, 0),
         score=1.0,
         iou_score=1.0,
-        predicted_label_id=0,
+        predicted_label_id=background_class_id,
     )
     best_item = max(prediction_items, key=lambda x: x["score"], default=dummy)
     return best_item
@@ -35,6 +35,9 @@ def match_records(
     # here we get a tensor of indices that match iou criteria (order is (pred_id, target_id))
     iou_table = pairwise_iou_record_record(target=target, prediction=prediction)
     pairs_indices = torch.nonzero(iou_table > iou_threshold)
+
+    # if a prediction has no target ids, then it is background
+    false_positive_indices = torch.nonzero(tensor([0 if any(row) else 1 for row in iou_table > iou_threshold ]))
 
     # creating a list of [target, matching_predictions]
     target_list = [
@@ -67,4 +70,4 @@ def match_records(
         # seems like a magic number, but we want to append to the list of target's matching_predictions
         target_list[target_id][1].append(single_prediction)
 
-    return target_list
+    return target_list, false_positive_indices

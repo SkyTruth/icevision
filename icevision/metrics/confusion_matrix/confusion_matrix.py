@@ -20,6 +20,7 @@ class SimpleConfusionMatrix(Metric):
         iou_threshold: float = 0.5,
         policy: MatchingPolicy = MatchingPolicy.BEST_SCORE,
         print_summary: bool = False,
+        class_list = [],
     ):
         super(SimpleConfusionMatrix, self).__init__()
         self.print_summary = print_summary
@@ -29,21 +30,19 @@ class SimpleConfusionMatrix(Metric):
         self._policy = policy
         self.class_map = None
         self.confusion_matrix: sklearn.metrics.confusion_matrix = None
+        self.class_list = class_list
 
     def _reset(self):
         self.target_labels = []
         self.predicted_labels = []
 
-    def accumulate(self, preds: Collection[Prediction]):
+    def accumulate(self, preds: Collection[Prediction], background_class_id=0):
         for pred in preds:
             target_record = pred.ground_truth
             prediction_record = pred.pred
             self.class_map = target_record.detection.class_map
-            # skip if empty ground_truths
-            # if not target_record.detection.bboxes:
-            #     continue
             # create matches based on iou
-            matches = match_records(
+            matches, false_positive_indices = match_records(
                 target=target_record,
                 prediction=prediction_record,
                 iou_threshold=self._iou_threshold,
@@ -56,26 +55,24 @@ class SimpleConfusionMatrix(Metric):
             # however bbox conf needs to be set high
             for target_item, prediction_items in matches:
                 if self._policy == MatchingPolicy.BEST_SCORE:
-                    predicted_item = get_best_score_item(
+                    predicted_item = get_best_score_item( # False negatives are captured/generated in this function
                         prediction_items=prediction_items,
+                        background_class_id=background_class_id,
                     )
                 elif self._policy == MatchingPolicy.BEST_IOU:
                     raise NotImplementedError
                 else:
                     raise RuntimeError(f"policy must be one of {list(MatchingPolicy)}")
 
-                # using label_id instead of named label to save memory
+                # using label_id because negative examples have ids but not labels
                 target_label = target_item["target_label_id"]
                 predicted_label = predicted_item["predicted_label_id"]
                 target_labels.append(target_label)
                 predicted_labels.append(predicted_label)
-            # we need to account for false preds on background class
-            if (
-                len(prediction_record.detection.labels) > 0
-                and len(target_record.detection.labels) == 0
-            ):
-                target_labels = [0 for i in pred.pred.detection.labels]
-                predicted_labels = pred.pred.detection.label_ids
+            # we need to account for false preds on background class, i.e. false positives
+            for idx in false_positive_indices:
+                target_labels.append(background_class_id)
+                predicted_labels.append(prediction_record.detection.label_ids[idx])
 
             # We need to store the entire list of gts/preds to support various CM logging methods
             assert len(predicted_labels) == len(target_labels)
@@ -85,7 +82,7 @@ class SimpleConfusionMatrix(Metric):
     def finalize(self):
         """Convert preds to numpy arrays and calculate the CM"""
         assert len(self.target_labels) == len(self.predicted_labels)
-        label_ids = list(self.class_map._class2id.values())
+        label_ids = np.arange(len(self.class_list))
         self.confusion_matrix = sklearn.metrics.confusion_matrix(
             y_true=self.target_labels,
             y_pred=self.predicted_labels,
@@ -98,13 +95,13 @@ class SimpleConfusionMatrix(Metric):
             labels=label_ids,
         )
         # default is no average so p r a nd f1 are initially arrays with vals for each class
-        p = {"Infra P": np.round(p[1], 3), "Vessel P": np.round(p[2], 3)}
-        r = {"Infra Recall": np.round(r[1], 3), "Vessel Recall": np.round(r[2], 3)}
-        f1 = {"Infra f1": np.round(f1[1], 3), "Vessel f1": np.round(f1[2], 3)}
+        p = {f"{category} Prec": np.round(p[i], 3) for i, category in enumerate(self.class_list)}
+        r = {f"{category} Recall": np.round(r[i], 3) for i, category in enumerate(self.class_list)}
+        f1 = {f"{category} F1": np.round(f1[i], 3) for i, category in enumerate(self.class_list)}
         if self.print_summary:
             print(self.confusion_matrix)
         self._reset()
-        return {"dummy_value_for_fastai": [p, r, f1]}
+        return {"dummy_value_for_fastai": [f1]}
 
     def plot(
         self,
