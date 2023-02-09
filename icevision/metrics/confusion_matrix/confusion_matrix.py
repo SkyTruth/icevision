@@ -20,7 +20,6 @@ class SimpleConfusionMatrix(Metric):
         iou_threshold: float = 0.5,
         policy: MatchingPolicy = MatchingPolicy.BEST_SCORE,
         print_summary: bool = False,
-        class_list = [],
     ):
         super(SimpleConfusionMatrix, self).__init__()
         self.print_summary = print_summary
@@ -30,7 +29,6 @@ class SimpleConfusionMatrix(Metric):
         self._policy = policy
         self.class_map = None
         self.confusion_matrix: sklearn.metrics.confusion_matrix = None
-        self.class_list = class_list
 
     def _reset(self):
         self.target_labels = []
@@ -82,7 +80,7 @@ class SimpleConfusionMatrix(Metric):
     def finalize(self):
         """Convert preds to numpy arrays and calculate the CM"""
         assert len(self.target_labels) == len(self.predicted_labels)
-        label_ids = np.arange(len(self.class_list))
+        label_ids = np.arange(self.class_map.num_classes)
         self.confusion_matrix = sklearn.metrics.confusion_matrix(
             y_true=self.target_labels,
             y_pred=self.predicted_labels,
@@ -95,9 +93,9 @@ class SimpleConfusionMatrix(Metric):
             labels=label_ids,
         )
         # default is no average so p r a nd f1 are initially arrays with vals for each class
-        p = {f"{category} Prec": np.round(p[i], 3) for i, category in enumerate(self.class_list)}
-        r = {f"{category} Recall": np.round(r[i], 3) for i, category in enumerate(self.class_list)}
-        f1 = {f"{category} F1": np.round(f1[i], 3) for i, category in enumerate(self.class_list)}
+        p = {f"{category} Prec": np.round(p[i], 3) for i, category in enumerate(self.class_map.get_classes())}
+        r = {f"{category} Recall": np.round(r[i], 3) for i, category in enumerate(self.class_map.get_classes())}
+        f1 = {f"{category} F1": np.round(f1[i], 3) for i, category in enumerate(self.class_map.get_classes())}
         if self.print_summary:
             print(self.confusion_matrix)
         self._reset()
