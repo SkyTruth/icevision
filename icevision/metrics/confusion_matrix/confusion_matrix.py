@@ -20,6 +20,9 @@ class SimpleConfusionMatrix(Metric):
         iou_threshold: float = 0.5,
         policy: MatchingPolicy = MatchingPolicy.BEST_SCORE,
         print_summary: bool = False,
+        apply_mask_nms: bool = False,
+        use_mask_similarity: bool = False,
+        background_class_id: int = 0,
     ):
         super(SimpleConfusionMatrix, self).__init__()
         self.print_summary = print_summary
@@ -29,21 +32,28 @@ class SimpleConfusionMatrix(Metric):
         self._policy = policy
         self.class_map = None
         self.confusion_matrix: sklearn.metrics.confusion_matrix = None
+        self._background_class_id = background_class_id
+        self._apply_mask_nms = apply_mask_nms
+        self._use_mask_similarity = use_mask_similarity
 
     def _reset(self):
         self.target_labels = []
         self.predicted_labels = []
 
-    def accumulate(self, preds: Collection[Prediction], background_class_id=0):
+    def accumulate(self, preds: Collection[Prediction]):
         for pred in preds:
+            pred.pred.detection.masks = torch.tensor(pred.pred.detection.mask_array.data)
             target_record = pred.ground_truth
             prediction_record = pred.pred
             self.class_map = target_record.detection.class_map
             # create matches based on iou
+            if self._apply_mask_nms:
+                prediction_record = apply_interclass_mask_nms(prediction_record, self._iou_threshold)
             matches, false_positive_indices = match_records(
                 target=target_record,
                 prediction=prediction_record,
                 iou_threshold=self._iou_threshold,
+                use_mask_similarity=self._use_mask_similarity
             )
 
             target_labels, predicted_labels = [], []
@@ -55,7 +65,7 @@ class SimpleConfusionMatrix(Metric):
                 if self._policy == MatchingPolicy.BEST_SCORE:
                     predicted_item = get_best_score_item( # False negatives are captured/generated in this function
                         prediction_items=prediction_items,
-                        background_class_id=background_class_id,
+                        background_class_id=self._background_class_id,
                     )
                 elif self._policy == MatchingPolicy.BEST_IOU:
                     raise NotImplementedError
@@ -69,7 +79,7 @@ class SimpleConfusionMatrix(Metric):
                 predicted_labels.append(predicted_label)
             # we need to account for false preds on background class, i.e. false positives
             for idx in false_positive_indices:
-                target_labels.append(background_class_id)
+                target_labels.append(self._background_class_id)
                 predicted_labels.append(prediction_record.detection.label_ids[idx])
 
             # We need to store the entire list of gts/preds to support various CM logging methods
@@ -93,9 +103,9 @@ class SimpleConfusionMatrix(Metric):
             labels=label_ids,
         )
         # default is no average so p r a nd f1 are initially arrays with vals for each class
-        p = {f"{category} Prec": np.round(p[i], 3) for i, category in enumerate(self.class_map.get_classes())}
-        r = {f"{category} Recall": np.round(r[i], 3) for i, category in enumerate(self.class_map.get_classes())}
-        f1 = {f"{category} F1": np.round(f1[i], 3) for i, category in enumerate(self.class_map.get_classes())}
+        p = {f"{category} Prec": np.round(p[i], 3) for i, category in enumerate(self.class_map.get_classes()) if i != self._background_class_id}
+        r = {f"{category} Recall": np.round(r[i], 3) for i, category in enumerate(self.class_map.get_classes()) if i != self._background_class_id}
+        f1 = {f"{category} F1": np.round(f1[i], 3) for i, category in enumerate(self.class_map.get_classes()) if i != self._background_class_id}
         if self.print_summary:
             print(self.confusion_matrix)
         self._reset()
