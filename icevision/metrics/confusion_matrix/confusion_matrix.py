@@ -17,49 +17,41 @@ class MatchingPolicy(Enum):
 class SimpleConfusionMatrix(Metric):
     def __init__(
         self,
-        use_soft_dice: bool = False,
-        dice_threshold: float = 0.5,
+        groundtruth_dice_thresh: float = 0.5,
+        groundtruth_dice_function = None,
         policy: MatchingPolicy = MatchingPolicy.BEST_SCORE,
         print_summary: bool = True,
-        use_soft_dice_nms: bool = False,
-        soft_dice_nms_threshold: float = 0.5,
         background_class_id: int = 0,
     ):
         Metric.__init__(self)
+        self._groundtruth_dice_thresh = groundtruth_dice_thresh
+        self._groundtruth_dice_function = groundtruth_dice_function
+        self._policy = policy
         self.print_summary = print_summary
+        self._background_class_id = background_class_id
         self.target_labels = []
         self.predicted_labels = []
-        self._dice_threshold = dice_threshold
-        self._policy = policy
         self.class_map = None
         self.confusion_matrix: sklearn.metrics.confusion_matrix = None
-        self._background_class_id = background_class_id
-        self._use_soft_dice_nms = use_soft_dice_nms
-        self._soft_dice_nms_threshold = soft_dice_nms_threshold
-        self._use_soft_dice = use_soft_dice
 
     def _reset(self):
         self.target_labels = []
         self.predicted_labels = []
 
-    def accumulate(self, preds: Collection[Prediction]):
-        for pred in preds:
-            pred.pred.detection.masks = torch.tensor(pred.pred.detection.mask_array.data)
-            target_record = pred.ground_truth
-            prediction_record = pred.pred
-            self.class_map = target_record.detection.class_map
+    def accumulate(self, ds, preds):
+        for target, pred in zip(ds, preds):
+            self.class_map = target.detection.class_map
             # create matches based on iou
-            if self._use_soft_dice_nms:
-                prediction_record = apply_global_soft_dice_nms(prediction = prediction_record, soft_dice_threshold = self._soft_dice_nms_threshold)
-
-            matches, false_positive_indices = match_records(
-                target=target_record,
-                prediction=prediction_record,
-                dice_threshold=self._dice_threshold,
-                use_soft_dice=self._use_soft_dice
-            )
 
             target_labels, predicted_labels = [], []
+
+            matches, false_positive_indices = match_records(
+                target=target,
+                prediction=pred,
+                groundtruth_dice_thresh=self._groundtruth_dice_thresh,
+                groundtruth_dice_function = self._groundtruth_dice_function,
+            )
+
             # iterate over multiple targets and preds in a record
             # assumes no overlap with multiple preds and single target
             # but mrcnn seems to handle this well with bbox confidence.
@@ -78,12 +70,12 @@ class SimpleConfusionMatrix(Metric):
                 # using label_id because negative examples have ids but not labels
                 target_label = target_item["target_label_id"]
                 predicted_label = predicted_item["predicted_label_id"]
-                target_labels.append(target_label)
-                predicted_labels.append(predicted_label)
+                target_labels.append(int(target_label))
+                predicted_labels.append(int(predicted_label))
             # we need to account for false preds on background class, i.e. false positives
             for idx in false_positive_indices:
                 target_labels.append(self._background_class_id)
-                predicted_labels.append(prediction_record.detection.label_ids[idx])
+                predicted_labels.append(int(pred["labels"][idx]))
 
             # We need to store the entire list of gts/preds to support various CM logging methods
             assert len(predicted_labels) == len(target_labels)
@@ -111,6 +103,7 @@ class SimpleConfusionMatrix(Metric):
         f1 = {f"{category} F1": np.round(f1[i], 3) for i, category in enumerate(self.class_map.get_classes()) if i != self._background_class_id}
         if self.print_summary:
             print(self.confusion_matrix)
+            print(f1)
         self._reset()
         return {"dummy_value_for_fastai": [f1]}
 
