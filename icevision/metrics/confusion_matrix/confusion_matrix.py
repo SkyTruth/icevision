@@ -17,24 +17,26 @@ class MatchingPolicy(Enum):
 class SimpleConfusionMatrix(Metric):
     def __init__(
         self,
-        iou_threshold: float = 0.5,
+        use_soft_dice: bool = False,
+        dice_threshold: float = 0.5,
         policy: MatchingPolicy = MatchingPolicy.BEST_SCORE,
-        print_summary: bool = False,
-        apply_mask_nms: bool = False,
-        use_mask_similarity: bool = False,
+        print_summary: bool = True,
+        use_soft_dice_nms: bool = False,
+        soft_dice_nms_threshold: float = 0.5,
         background_class_id: int = 0,
     ):
-        super(SimpleConfusionMatrix, self).__init__()
+        Metric.__init__(self)
         self.print_summary = print_summary
         self.target_labels = []
         self.predicted_labels = []
-        self._iou_threshold = iou_threshold
+        self._dice_threshold = dice_threshold
         self._policy = policy
         self.class_map = None
         self.confusion_matrix: sklearn.metrics.confusion_matrix = None
         self._background_class_id = background_class_id
-        self._apply_mask_nms = apply_mask_nms
-        self._use_mask_similarity = use_mask_similarity
+        self._use_soft_dice_nms = use_soft_dice_nms
+        self._soft_dice_nms_threshold = soft_dice_nms_threshold
+        self._use_soft_dice = use_soft_dice
 
     def _reset(self):
         self.target_labels = []
@@ -47,13 +49,14 @@ class SimpleConfusionMatrix(Metric):
             prediction_record = pred.pred
             self.class_map = target_record.detection.class_map
             # create matches based on iou
-            if self._apply_mask_nms:
-                prediction_record = apply_interclass_mask_nms(prediction_record, self._iou_threshold)
+            if self._use_soft_dice_nms:
+                prediction_record = apply_global_soft_dice_nms(prediction = prediction_record, soft_dice_threshold = self._soft_dice_nms_threshold)
+
             matches, false_positive_indices = match_records(
                 target=target_record,
                 prediction=prediction_record,
-                iou_threshold=self._iou_threshold,
-                use_mask_similarity=self._use_mask_similarity
+                dice_threshold=self._dice_threshold,
+                use_soft_dice=self._use_soft_dice
             )
 
             target_labels, predicted_labels = [], []
