@@ -9,24 +9,17 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-class MatchingPolicy(Enum):
-    BEST_SCORE = 1
-    BEST_IOU = 2
-
-
 class SimpleConfusionMatrix(Metric):
     def __init__(
         self,
         groundtruth_dice_thresh: float = 0.5,
         groundtruth_dice_function = None,
-        policy: MatchingPolicy = MatchingPolicy.BEST_SCORE,
         print_summary: bool = True,
         background_class_id: int = 0,
     ):
         Metric.__init__(self)
         self._groundtruth_dice_thresh = groundtruth_dice_thresh
         self._groundtruth_dice_function = groundtruth_dice_function
-        self._policy = policy
         self.print_summary = print_summary
         self._background_class_id = background_class_id
         self.target_labels = []
@@ -43,41 +36,26 @@ class SimpleConfusionMatrix(Metric):
             self.class_map = target.detection.class_map
             # create matches based on iou
 
-            target_labels, predicted_labels = [], []
-
-            matches, false_positive_indices = match_records(
+            aligned_pairs, FP_idxs, FN_idxs = match_records(
                 target=target,
                 prediction=pred,
                 groundtruth_dice_thresh=self._groundtruth_dice_thresh,
                 groundtruth_dice_function = self._groundtruth_dice_function,
             )
 
-            # iterate over multiple targets and preds in a record
-            # assumes no overlap with multiple preds and single target
-            # but mrcnn seems to handle this well with bbox confidence.
-            # however bbox conf needs to be set high
-            for target_item, prediction_items in matches:
-                if self._policy == MatchingPolicy.BEST_SCORE:
-                    predicted_item = get_best_score_item( # False negatives are captured/generated in this function
-                        prediction_items=prediction_items,
-                        background_class_id=self._background_class_id,
-                    )
-                elif self._policy == MatchingPolicy.BEST_IOU:
-                    raise NotImplementedError
-                else:
-                    raise RuntimeError(f"policy must be one of {list(MatchingPolicy)}")
-
-                # using label_id because negative examples have ids but not labels
-                target_label = target_item["target_label_id"]
-                predicted_label = predicted_item["predicted_label_id"]
-                target_labels.append(int(target_label))
-                predicted_labels.append(int(predicted_label))
-            # we need to account for false preds on background class, i.e. false positives
-            for idx in false_positive_indices:
+            target_labels, predicted_labels = [], []
+            for pred_idx, gt_idx in aligned_pairs:
+                predicted_labels.append(int(pred["labels"][pred_idx]))
+                target_labels.append(target.detection.label_ids[gt_idx])
+                
+            for pred_idx in FP_idxs:
+                predicted_labels.append(int(pred["labels"][pred_idx]))
                 target_labels.append(self._background_class_id)
-                predicted_labels.append(int(pred["labels"][idx]))
+                
+            for gt_idx in FN_idxs:
+                predicted_labels.append(self._background_class_id)
+                target_labels.append(target.detection.label_ids[gt_idx])
 
-            # We need to store the entire list of gts/preds to support various CM logging methods
             assert len(predicted_labels) == len(target_labels)
             self.target_labels.extend(target_labels)
             self.predicted_labels.extend(predicted_labels)
@@ -104,6 +82,7 @@ class SimpleConfusionMatrix(Metric):
         if self.print_summary:
             print(self.confusion_matrix)
             print(f1)
+            print("Instance Macro-F1 (-background):", np.round(sum(f1.values())/len(f1),3))
         self._reset()
         return {"dummy_value_for_fastai": [f1]}
 

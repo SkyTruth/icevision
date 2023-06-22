@@ -14,7 +14,26 @@ def get_best_score_item(prediction_items: Collection[Dict], background_class_id)
     )
     best_item = max(prediction_items, key=lambda x: x["score"], default=dummy)
     return best_item
+
     
+def get_aligned_pairs(dice_table, groundtruth_dice_thresh):
+    # Flatten the tensor and get the sorted indices
+    descending_scores, descending_idxs = torch.sort(dice_table.view(-1), descending=True)
+    rows, cols = divmod(descending_idxs.numpy(), dice_table.shape[1])
+    ordered_idxs = torch.stack((torch.Tensor(rows), torch.Tensor(cols))).t()
+
+    aligned_pairs = []
+    for count, (pred_idx, gt_idx) in enumerate(ordered_idxs):
+        # If this row or column has been recorded already, skip
+        if any(pred_idx == pair[0] or gt_idx == pair[1] for pair in aligned_pairs):
+            continue
+        # If the scores are now below the threshold, stop
+        if descending_scores[count] <= max(groundtruth_dice_thresh, 0):
+            break
+        # Record the pair (i, j) as aligned (no verdict on True/False Positive yet)
+        aligned_pairs.append((int(pred_idx.item()), int(gt_idx.item())))
+    return aligned_pairs
+
 
 def match_records(target: BaseRecord, prediction, groundtruth_dice_thresh, groundtruth_dice_function) -> Tuple[List[Dict], torch.Tensor]:
     """
@@ -44,26 +63,12 @@ def match_records(target: BaseRecord, prediction, groundtruth_dice_thresh, groun
     """
     # Compute pairwise IoU
     dice_table = groundtruth_dice_function(target=target, prediction=prediction)
-    
-    # Indices of prediction-target pairs exceeding IoU threshold
-    pairs_indices = torch.nonzero(dice_table.ge(groundtruth_dice_thresh))
-    
-    # Indices where a prediction doesn't match any target (considered as false positives)
-    false_positive_indices = torch.nonzero(torch.tensor([0 if any(row) else 1 for row in dice_table.ge(groundtruth_dice_thresh)]))
 
-    # Form list of target details and their corresponding matched predictions
-    target_list, prediction_list = [], []
-    
-    for bbox, label, label_id in zip(target.detection.bboxes, target.detection.labels, target.detection.label_ids):
-        target_list.append([{'target_bbox': bbox, 'target_label': label, 'target_label_id': label_id}, []])
+    aligned_pairs = get_aligned_pairs(dice_table, groundtruth_dice_thresh)
+    aligned_preds = set([pair[0] for pair in aligned_pairs])
+    aligned_gts = set([pair[1] for pair in aligned_pairs])
 
-    for bbox, label_id, score in zip(prediction["boxes"], prediction["labels"], prediction["scores"]):
-        prediction_list.append({'predicted_bbox': bbox, 'predicted_label_id': label_id, 'score': score})
+    FP_idxs = [i for i in range(dice_table.shape[0]) if i not in aligned_preds]
+    FN_idxs = [i for i in range(dice_table.shape[1]) if i not in aligned_gts]
 
-    # Attach matched predictions to respective targets
-    for pred_id, target_id in pairs_indices:
-        matched_prediction = prediction_list[pred_id].copy()
-        matched_prediction['dice_score'] = round(dice_table[pred_id, target_id].item(), 4)
-        target_list[target_id][1].append(matched_prediction)
-
-    return target_list, false_positive_indices
+    return aligned_pairs, FP_idxs, FN_idxs    
