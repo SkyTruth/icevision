@@ -31,5 +31,6 @@ if SoftDependencies.mmseg:
 if SoftDependencies.fastai:
     from icevision.models import fastai
 
-if SoftDependencies.sahi:
-    from icevision.models import inference_sahi
+# if SoftDependencies.sahi:
+#     from icevision.models import inference_sahi
+# Commented out 2023-01-31 by Jona, because the sahi module seems to have changed without backwards compatability

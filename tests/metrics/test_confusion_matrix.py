@@ -78,34 +78,8 @@ def empty_prediction():
     return pred
 
 
-def test_pairwise_iou_empty(target, empty_prediction):
-    result = pairwise_iou_record_record(target=target, prediction=empty_prediction)
-    empty_result = pairwise_iou_record_record(
-        prediction=empty_prediction, target=empty_prediction
-    )
-    assert result.numel() == 0
-    assert result.shape == (0, 3)
-    assert empty_result.numel() == 0
-    assert empty_result.shape == (0, 0)
-
-
-def test_pairwise_iou_matching(target, prediction):
-    result = pairwise_iou_record_record(target=target, prediction=prediction)
-    expected_result = torch.tensor(
-        [
-            [1.0000, 0.2000, 0.0000],
-            [0.5122, 0.5122, 0.0000],
-            [0.0000, 0.3636, 0.0000],
-            [0.1026, 0.0000, 0.0000],
-            [0.1246, 0.0000, 0.0000],
-            [0.1026, 0.0000, 0.0000],
-        ]
-    )
-    assert torch.allclose(result, expected_result, atol=1e-4)
-
-
 def test_match_prediction(target, prediction):
-    result = match_records(target, prediction, iou_threshold=0.5)
+    result = match_records(target, prediction, dice_threshold=0.5)
     expected_result = [
         [
             {

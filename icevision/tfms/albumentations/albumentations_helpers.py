@@ -6,8 +6,8 @@ from icevision.imports import *
 from icevision.core import *
 
 
-def resize(size, ratio_resize=A.LongestMaxSize):
-    return ratio_resize(size) if isinstance(size, int) else A.Resize(*size[::-1])
+def resize(size, ratio_resize=A.LongestMaxSize, interpolation=cv2.INTER_LINEAR):
+    return ratio_resize(size, interpolation=interpolation) if isinstance(size, int) else A.Resize(*size[::-1], interpolation=interpolation)
 
 
 def resize_and_pad(
@@ -15,9 +15,10 @@ def resize_and_pad(
     pad: A.DualTransform = partial(
         A.PadIfNeeded, border_mode=cv2.BORDER_CONSTANT, value=[124, 116, 104]
     ),
+    interpolation = cv2.INTER_LINEAR,
 ):
     width, height = (size, size) if isinstance(size, int) else size
-    return [resize(size), pad(min_height=height, min_width=width)]
+    return [resize(size, interpolation=interpolation), pad(min_height=height, min_width=width)]
 
 
 def aug_tfms(
