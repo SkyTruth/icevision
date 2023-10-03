@@ -37,7 +37,7 @@ model = dict(
         type="StandardRoIHead",
         bbox_roi_extractor=dict(
             type="SingleRoIExtractor",
-            roi_layer=dict(type="RoIAlign", output_size=7*2, sampling_ratio=0),
+            roi_layer=dict(type="RoIAlign", output_size=7, sampling_ratio=0),
             out_channels=256,
             featmap_strides=[4, 8, 16, 32],
         ),
@@ -45,7 +45,7 @@ model = dict(
             type="Shared2FCBBoxHead",
             in_channels=256,
             fc_out_channels=1024,
-            roi_feat_size=7*2,
+            roi_feat_size=7,
             num_classes=80,
             bbox_coder=dict(
                 type="DeltaXYWHBBoxCoder",
@@ -58,7 +58,7 @@ model = dict(
         ),
         mask_roi_extractor=dict(
             type="SingleRoIExtractor",
-            roi_layer=dict(type="RoIAlign", output_size=7*2, sampling_ratio=0),
+            roi_layer=dict(type="RoIAlign", output_size=7, sampling_ratio=0),
             out_channels=256,
             featmap_strides=[4, 8, 16, 32],
         ),
@@ -117,7 +117,7 @@ model = dict(
                 neg_pos_ub=-1,
                 add_gt_as_proposals=True,
             ),
-            mask_size=28*2,
+            mask_size=28,
             pos_weight=-1,
             debug=False,
         ),
